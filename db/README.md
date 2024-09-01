@@ -1,1 +1,1 @@
-# Chroma DB will store data in this Directory
+# Chroma DB will store data in this directory.
