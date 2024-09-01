@@ -16,7 +16,7 @@ from langchain.prompts import PromptTemplate
 app = Flask(__name__)
 
 folder_path = "db"
-cached_llm = Ollama(model="llama3", base_url="http://ollama.trahman.me:11434")
+cached_llm = Ollama(model="llama3", base_url="http://ollama.trahman.me")
 embedding = FastEmbedEmbeddings()
 
 text_splitter = RecursiveCharacterTextSplitter(
@@ -42,7 +42,7 @@ def askJsonPost():
     print(f"query: {query}")
 
     # Fetch JSON data from the API
-    response = requests.get("http://api.trahman.me:1337/api/blogs")
+    response = requests.get("http://api.trahman.me/api/blogs")
     if response.status_code != 200:
         return {"error": "Failed to fetch data from API"}
 
