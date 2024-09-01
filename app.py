@@ -25,7 +25,7 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 raw_prompt = PromptTemplate.from_template(
     """ 
-    <s>[INST] You are a friendly assistant good at analysing json like documents. Provide short answer no more than three lines. [/INST] </s>
+    <s>[INST] You are a friendly assistant good at analysing json like documents. Provide short and near to precise answer no more than three lines. Don't add raw context data. [/INST] </s>
     [INST] {input}
            Context: {context}
            Answer:
