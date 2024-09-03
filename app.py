@@ -1,6 +1,8 @@
 import os
 import requests
 import json
+import shutil
+import time
 from pathlib import Path
 from flask import Flask, request
 from flask_cors import CORS
@@ -13,7 +15,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.prompts import PromptTemplate
-import time
 
 
 app = Flask(__name__)
@@ -29,7 +30,7 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 raw_prompt = PromptTemplate.from_template(
     """ 
-    <s>[INST] You are a friendly assistant good at analysing json like documents. Provide short and near to precise answer no more than three lines. Don't add raw context data. [/INST] </s>
+    <s>[INST] You are Talha's friendly assistant. Your task is to answer questions or provide information about Talha based on the context provided. Keep your responses concise, no more than three lines. [/INST] </s>
     [INST] {input}
            Context: {context}
            Answer:
@@ -37,14 +38,16 @@ raw_prompt = PromptTemplate.from_template(
 """
 )
 
-@app.route('/test', methods=['POST'])
+@app.route('/askme', methods=['POST'])
 def ask():
     json_content = request.json
     query = json_content.get("query")
 
     print(f"query: {query}")
     # Simulate a delay
-    time.sleep(5)
+    time.sleep(3)
+
+    load_data()
     
     # Response JSON
     response = {
@@ -61,42 +64,11 @@ def askJsonPost():
 
     print(f"query: {query}")
 
-    # Fetch JSON data from the API
-    response = requests.get("http://api.trahman.me/api/blogs")
-    if response.status_code != 200:
-        return {"error": "Failed to fetch data from API"}
+    load_data()
 
-    # Extract data from the JSON
-    json_data = response.json()
-    blogs = json_data.get("data", [])
+    vector_store = Chroma(persist_directory=folder_path, embedding_function=embedding)
 
-    # Ensure the data directory exists
-    os.makedirs('data', exist_ok=True)
-
-    # Save each blog entry to a file named with its ID
-    for blog in blogs:
-        blog_id = blog.get("id", "unknown")
-        file_path = os.path.join('data', f'{blog_id}.json')
-        with open(file_path, 'w') as f:
-            json.dump(blog, f)
-
-    loader = DirectoryLoader('./data', glob='**/*.json', show_progress=True, loader_cls=JSONLoader, loader_kwargs = {'jq_schema':'.attributes', 'text_content':False})
-    
-    docs = loader.load()
-    print(f"docs len={len(docs)}")
-
-    # Split the documents into chunks
-    chunks = text_splitter.split_documents(docs)
-    print(f"chunks len={len(chunks)}")
-
-    # Load the chunks into a vector store
-    vector_store = Chroma.from_documents(
-        documents=chunks, embedding=embedding, persist_directory=folder_path
-    )
-
-    vector_store.persist()
-
-    # Create the retriever and chain
+    print("Creating chain")
     retriever = vector_store.as_retriever(
         search_type="similarity_score_threshold",
         search_kwargs={
@@ -114,6 +86,75 @@ def askJsonPost():
 
     response_answer = {"answer": result.get("answer", "")}
     return response_answer
+
+
+def load_data():
+    new_data = False
+    # Define the directory containing the files
+    data_directory = 'data'
+    response = requests.get("http://api.trahman.me/api/blogs")
+    if response.status_code != 200:
+        print({"error": "Failed to fetch data from API"})
+        exit()
+
+    # Extract data from the JSON
+    json_data = response.json()
+    blogs = json_data.get("data", [])
+
+    # Ensure the data directory exists
+    os.makedirs('data', exist_ok=True)
+
+    # Process each blog entry
+    for blog in blogs:
+        blog_id = blog.get("id", "unknown")
+        
+        # Define file paths
+        txt_file_path = os.path.join(data_directory, f'{blog_id}.txt')
+        old_txt_file_path = os.path.join(data_directory, f'{blog_id}.txt.old')
+
+        # Check if the .txt.old file exists for this ID
+        if os.path.exists(old_txt_file_path):
+            print(f"Skipping {blog_id} as .txt.old file already exists")
+            continue
+
+        # Extract and save details to a .txt file
+        new_data = True
+        details = blog.get("attributes", {}).get("details", "")
+        with open(txt_file_path, 'w') as f:
+            f.write(details)
+
+        print(f"Saved details for blog ID {blog_id}")
+
+    if not new_data:
+        return
+
+    # loader = DirectoryLoader('./data', glob='**/*.json', show_progress=True, loader_cls=JSONLoader, loader_kwargs = {'jq_schema':'.attributes', 'text_content':False})
+    loader = DirectoryLoader('./data', glob='**/*.txt', show_progress=True)
+    
+    docs = loader.load_and_split()
+    print(f"docs len={len(docs)}")
+
+    # Split the documents into chunks
+    chunks = text_splitter.split_documents(docs)
+    print(f"chunks len={len(chunks)}")
+
+    # Load the chunks into a vector store
+    vector_store = Chroma.from_documents(
+        documents=chunks, embedding=embedding, persist_directory=folder_path
+    )
+
+    vector_store.persist()
+
+    # Iterate over all files in the data directory
+    for filename in os.listdir(data_directory):
+        if filename.endswith('.txt'):
+            # Define file paths
+            file_path = os.path.join(data_directory, filename)
+            new_file_path = os.path.join(data_directory, filename + '.old')
+            
+            # Move the file
+            shutil.move(file_path, new_file_path)
+            print(f"Moved '{file_path}' to '{new_file_path}'")
 
 
 
