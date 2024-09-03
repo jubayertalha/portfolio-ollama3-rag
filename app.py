@@ -3,6 +3,7 @@ import requests
 import json
 from pathlib import Path
 from flask import Flask, request
+from flask_cors import CORS
 from langchain_community.llms import Ollama
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import DirectoryLoader
@@ -12,8 +13,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.prompts import PromptTemplate
+import time
+
 
 app = Flask(__name__)
+CORS(app)  # This will allow all domains by default
 
 folder_path = "db"
 cached_llm = Ollama(model="llama3", base_url="http://ollama.trahman.me")
@@ -32,6 +36,22 @@ raw_prompt = PromptTemplate.from_template(
     [/INST]
 """
 )
+
+@app.route('/test', methods=['POST'])
+def ask():
+    json_content = request.json
+    query = json_content.get("query")
+
+    print(f"query: {query}")
+    # Simulate a delay
+    time.sleep(5)
+    
+    # Response JSON
+    response = {
+        "answer": "According to the context, Talha has friends named Riyaz, Shanto, and Muntasir. They spend their weekends together, engaging in activities like gaming sessions, movie marathons, and lively debates about tech trends."
+    }
+    
+    return response
 
 @app.route("/ask", methods=["POST"])
 def askJsonPost():
